@@ -46,6 +46,7 @@ class MainState(TypedDict):
   token_budget: int
   tokens_used: int
   query_results: list
+  error: str | None
 
 def call_llm(state: MainState) -> dict:
   context = [SystemMessage(content = system_prompt)] + state['messages']
@@ -53,7 +54,10 @@ def call_llm(state: MainState) -> dict:
   try:
     result = llm_provider.invoke(context)
   except TooManyRequestsResponseError:
-    console.print(f"[bold cyan]agent[/] Currently the Provider is busy and asked us to wait :)")
+    return {
+      "messages": [AIMessage(content="Provider is busy, try again shortly.")],
+      "error": "rate_limited",
+    }
 
   return { "messages": [result], "tokens_used": state['tokens_used'] + result.usage_metadata["total_tokens"] }
 
