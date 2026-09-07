@@ -1,0 +1,320 @@
+dataset: bigquery-public-data.thelook_ecommerce
+ 
+tables:
+  users:
+    enabled: true
+    description: >
+      Customer master data: demographics and acquisition info. One row per
+      registered customer. CONTAINS PII — identity and address columns are
+      blocked; use id for joins and the demographic columns for segmentation.
+    joins:
+      - "users.id = orders.user_id"
+      - "users.id = order_items.user_id"
+    columns:
+      id:
+        type: INTEGER
+        allowed: true
+        description: Unique customer id. Join key to orders and order_items.
+      first_name:
+        type: STRING
+        allowed: false
+        pii: true
+      last_name:
+        type: STRING
+        allowed: false
+        pii: true
+      email:
+        type: STRING
+        allowed: false
+        pii: true
+      age:
+        type: INTEGER
+        allowed: true
+        description: Customer age in years. Use for age-band segmentation (e.g. bucket into 18-24, 25-34...).
+      gender:
+        type: STRING
+        allowed: true
+        description: Customer gender.
+        values: ["M", "F"]
+      state:
+        type: STRING
+        allowed: true
+        description: >
+          Customer's state/region as free text. contains both US states
+          and international regions; values are full names ("California"),
+          not codes. Primary dimension for regional analysis.
+      street_address:
+        type: STRING
+        allowed: false
+        pii: true
+      postal_code:
+        type: STRING
+        allowed: false
+        pii: true
+      city:
+        type: STRING
+        allowed: true
+        description: Customer city. Finer-grained geography than state.
+      country:
+        type: STRING
+        allowed: true
+        description: Customer country, full name (e.g. "United States", "Brasil").
+      latitude:
+        type: FLOAT
+        allowed: false
+        pii: true
+      longitude:
+        type: FLOAT
+        allowed: false
+        pii: true
+      traffic_source:
+        type: STRING
+        allowed: true
+        description: Acquisition channel the customer signed up through.
+        values: ["Search", "Organic", "Email", "Display", "Facebook"]
+      created_at:
+        type: TIMESTAMP
+        allowed: true
+        description: >
+          Account signup time. Use for cohort analysis (signup month cohorts)
+          and new-vs-returning segmentation. NOT the purchase date — purchase
+          dates live on orders/order_items.
+ 
+  orders:
+    enabled: true
+    description: >
+      Order headers. One row per order (an order groups one or more items).
+      Use for order counts, order status funnels, and fulfilment timing.
+      Revenue does NOT live here — it lives on order_items.sale_price.
+    joins:
+      - "orders.user_id = users.id"
+      - "orders.order_id = order_items.order_id"
+    columns:
+      order_id:
+        type: INTEGER
+        allowed: true
+        description: Unique order id. Join key to order_items.
+      user_id:
+        type: INTEGER
+        allowed: true
+        description: Customer who placed the order. Join key to users.id.
+      status:
+        type: STRING
+        allowed: true
+        description: >
+          Order lifecycle status. For realized-revenue and completed-demand
+          analysis exclude Cancelled and Returned.
+        values: ["Complete", "Shipped", "Processing", "Cancelled", "Returned"]
+      gender:
+        type: STRING
+        allowed: true
+        description: Denormalized copy of the customer's gender. Prefer users.gender; kept for join-free convenience.
+        values: ["M", "F"]
+      created_at:
+        type: TIMESTAMP
+        allowed: true
+        description: When the order was placed. Primary time axis for order-level analysis.
+      returned_at:
+        type: TIMESTAMP
+        allowed: true
+        description: When the order was returned. NULL if never returned.
+      shipped_at:
+        type: TIMESTAMP
+        allowed: true
+        description: When the order shipped. NULL if not yet shipped. shipped_at - created_at = fulfilment lag.
+      delivered_at:
+        type: TIMESTAMP
+        allowed: true
+        description: When the order was delivered. NULL if not delivered.
+      num_of_item:
+        type: INTEGER
+        allowed: true
+        description: Number of items in the order (matches count of order_items rows).
+ 
+  order_items:
+    enabled: true
+    description: >
+      THE revenue table. One row per individual item sold within an order —
+      the finest-grained sales fact. Revenue = SUM(sale_price). Never use
+      products.retail_price for revenue (list price, not paid price). Each
+      row also links to the exact physical unit that fulfilled it
+      (inventory_item_id).
+    joins:
+      - "order_items.order_id = orders.order_id"
+      - "order_items.user_id = users.id"
+      - "order_items.product_id = products.id"
+      - "order_items.inventory_item_id = inventory_items.id"
+    columns:
+      id:
+        type: INTEGER
+        allowed: true
+        description: Unique order-item id.
+      order_id:
+        type: INTEGER
+        allowed: true
+        description: Parent order. Join key to orders.
+      user_id:
+        type: INTEGER
+        allowed: true
+        description: Purchasing customer. Join key to users.id (denormalized for join-free per-user revenue).
+      product_id:
+        type: INTEGER
+        allowed: true
+        description: Product sold. Join key to products.id.
+      inventory_item_id:
+        type: INTEGER
+        allowed: true
+        description: The specific physical unit that fulfilled this line. Join to inventory_items for cost/margin.
+      status:
+        type: STRING
+        allowed: true
+        description: >
+          Item-level lifecycle (an order's items can differ, e.g. one item
+          returned). Exclude Cancelled and Returned for realized revenue.
+        values: ["Complete", "Shipped", "Processing", "Cancelled", "Returned"]
+      created_at:
+        type: TIMESTAMP
+        allowed: true
+        description: Purchase time of this item. Primary time axis for revenue analysis.
+      shipped_at:
+        type: TIMESTAMP
+        allowed: true
+        description: NULL if not shipped.
+      delivered_at:
+        type: TIMESTAMP
+        allowed: true
+        description: NULL if not delivered.
+      returned_at:
+        type: TIMESTAMP
+        allowed: true
+        description: NULL if never returned. IS NOT NULL = returned item; basis for return-rate analysis.
+      sale_price:
+        type: FLOAT
+        allowed: true
+        description: >
+          Actual price paid by the customer for this unit, in USD. THE revenue
+          measure: revenue = SUM(sale_price). Margin = sale_price minus
+          inventory_items.cost for the linked unit.
+ 
+  products:
+    enabled: true
+    description: >
+      Product catalog. One row per product TYPE (not per physical unit —
+      physical units live in inventory_items). Descriptive attributes for
+      slicing sales: category, brand, department. retail_price is LIST price;
+      actual paid price is order_items.sale_price.
+    joins:
+      - "products.id = order_items.product_id"
+      - "products.id = inventory_items.product_id"
+      - "products.distribution_center_id = distribution_centers.id"
+    columns:
+      id:
+        type: INTEGER
+        allowed: true
+        description: Unique product id.
+      cost:
+        type: FLOAT
+        allowed: true
+        description: Catalog unit cost to the company, USD. For margin at the sold-unit level prefer inventory_items.cost.
+      category:
+        type: STRING
+        allowed: true
+        description: >
+          Product category (e.g. "Jeans", "Outerwear & Coats", "Swim",
+          "Accessories", "Intimates"). ~26 values; primary product dimension.
+          Get exact spellings via SELECT DISTINCT when filtering.
+      name:
+        type: STRING
+        allowed: true
+        description: Full product display name.
+      brand:
+        type: STRING
+        allowed: true
+        description: Brand name. High cardinality (thousands).
+      retail_price:
+        type: FLOAT
+        allowed: true
+        description: List price, USD. NOT revenue — use order_items.sale_price for what customers paid.
+      department:
+        type: STRING
+        allowed: true
+        description: Top-level split.
+        values: ["Men", "Women"]
+      sku:
+        type: STRING
+        allowed: true
+        description: Stock keeping unit code. Identifier only; rarely analytical.
+      distribution_center_id:
+        type: INTEGER
+        allowed: true
+        description: Distribution center that stocks this product. Join key to distribution_centers.
+ 
+  # ---------------------------------------------------------------------------
+  # Extension tables — present in the dataset, out of prototype scope.
+  # Flip enabled: true to bring one into the agent (prompt catalog, validator,
+  # and describe_table pick it up automatically). This block IS the
+  # "extendable to new data sources" mechanism.
+  # ---------------------------------------------------------------------------
+ 
+  inventory_items:
+    enabled: false
+    description: >
+      Physical stock: one row per individual UNIT that entered a warehouse.
+      Unlocks stock-on-hand (sold_at IS NULL), sell-through speed
+      (sold_at - created_at), true margin (order_items.sale_price - cost),
+      and dead-stock analysis. Product attributes are denormalized in.
+    joins:
+      - "inventory_items.product_id = products.id"
+      - "inventory_items.id = order_items.inventory_item_id"
+      - "inventory_items.product_distribution_center_id = distribution_centers.id"
+    columns:
+      id: { type: INTEGER, allowed: true, description: Unique physical-unit id. }
+      product_id: { type: INTEGER, allowed: true, description: Product type of this unit. }
+      created_at: { type: TIMESTAMP, allowed: true, description: When the unit entered inventory. }
+      sold_at: { type: TIMESTAMP, allowed: true, description: When the unit was sold. NULL = still in stock. }
+      cost: { type: FLOAT, allowed: true, description: What the company paid for this unit, USD. Margin basis. }
+      product_category: { type: STRING, allowed: true, description: Denormalized product category. }
+      product_name: { type: STRING, allowed: true, description: Denormalized product name. }
+      product_brand: { type: STRING, allowed: true, description: Denormalized brand. }
+      product_retail_price: { type: FLOAT, allowed: true, description: Denormalized list price. }
+      product_department: { type: STRING, allowed: true, description: Denormalized department (Men/Women). }
+      product_sku: { type: STRING, allowed: true, description: Denormalized SKU. }
+      product_distribution_center_id: { type: INTEGER, allowed: true, description: Warehouse holding this unit. }
+ 
+  distribution_centers:
+    enabled: false
+    description: >
+      Warehouse locations. One row per distribution center. Enables
+      warehouse-level inventory and fulfilment analysis.
+    joins:
+      - "distribution_centers.id = products.distribution_center_id"
+    columns:
+      id: { type: INTEGER, allowed: true, description: Unique distribution center id. }
+      name: { type: STRING, allowed: true, description: Center name, typically "City State" (e.g. "Memphis TN"). }
+      latitude: { type: FLOAT, allowed: true, description: Facility latitude (business location — not PII). }
+      longitude: { type: FLOAT, allowed: true, description: Facility longitude. }
+ 
+  events:
+    enabled: false
+    description: >
+      Web clickstream: one row per page event in a browsing session. Unlocks
+      funnel analysis (view -> cart -> purchase), session behavior, and
+      traffic analysis. High volume; aggregate aggressively. Contains
+      network-level quasi-identifiers (ip_address blocked).
+    joins:
+      - "events.user_id = users.id"
+    columns:
+      id: { type: INTEGER, allowed: true, description: Unique event id. }
+      user_id: { type: INTEGER, allowed: true, description: Customer if logged in; NULL for anonymous sessions. }
+      sequence_number: { type: INTEGER, allowed: true, description: Position of the event within its session. }
+      session_id: { type: STRING, allowed: true, description: Browsing session identifier; group by this for session analysis. }
+      created_at: { type: TIMESTAMP, allowed: true, description: Event time. }
+      ip_address: { type: STRING, allowed: false, pii: true }
+      city: { type: STRING, allowed: true, description: Geo-resolved city of the session. }
+      state: { type: STRING, allowed: true, description: Geo-resolved state of the session. }
+      postal_code: { type: STRING, allowed: false, pii: true }
+      browser: { type: STRING, allowed: true, description: Browser family (Chrome, Safari, Firefox, ...). }
+      traffic_source: { type: STRING, allowed: true, description: Channel that led to the session (Email, Adwords, Organic, YouTube, Facebook). }
+      uri: { type: STRING, allowed: true, description: Page path of the event. }
+      event_type: { type: STRING, allowed: true, description: Kind of event (e.g. home, department, product, cart, purchase, cancel). }
+ 

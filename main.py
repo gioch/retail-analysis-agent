@@ -1,9 +1,10 @@
 import os
+import yaml
 from dotenv import load_dotenv
 from rich.console import Console
 
 from langgraph.graph.message import add_messages
-from typing import TypedDict, Annotated
+from typing import TypedDict, Annotated, Literal
 
 from langchain.messages import AnyMessage, SystemMessage, AIMessage, HumanMessage
 from langchain_openrouter import ChatOpenRouter
@@ -12,7 +13,36 @@ from openrouter.errors import TooManyRequestsResponseError
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 
+from pydantic import BaseModel
+
 load_dotenv()
+
+# Loading schema and comparing it against the real database to ensure its validity
+# (I have to move this to the separate file)
+ColumnType = Literal["INTEGER", "STRING", "TIMESTAMP", "FLOAT", "BOOLEAN"]
+class EComerceDBColumn(BaseModel):
+  type: ColumnType
+  pii: bool = None
+  allowed: bool
+  description: str = None
+
+class EComerceDBTable(BaseModel):
+  enabled: bool
+  description: str = None
+  joins: list[str] = []
+  columns: dict[str, EComerceDBColumn]
+  values: list[str] | None = None
+
+class EComerceDBSchema(BaseModel):
+  tables: dict[str, EComerceDBTable]
+
+with open("ecomerce_db_schema.yml") as f:
+  raw = yaml.safe_load(f)
+
+schema = EComerceDBSchema.model_validate(raw)
+
+# LLM configurations
+# (I have to move this to the separate file)
 
 TOKEN_BUDGET = 10.000
 SYSTEM_PROMPT = """
@@ -24,6 +54,8 @@ SYSTEM_PROMPT = """
 llm_provider = ChatOpenRouter(model = "google/gemma-3-4b-it")
 console = Console()
 
+# State and Graph configurations
+# (I have to move this to the separate file)
 class MainState(TypedDict):
   messages: Annotated[list[AnyMessage], add_messages]
   token_budget: int
