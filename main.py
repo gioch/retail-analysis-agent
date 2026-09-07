@@ -2,31 +2,50 @@ import os
 from dotenv import load_dotenv
 from rich.console import Console
 
+from langgraph.graph.message import add_messages
+from typing import TypedDict, Annotated
+
+from langchain.messages import AnyMessage, SystemMessage, AIMessage, HumanMessage
 from langchain_openrouter import ChatOpenRouter
-from langchain.messages import SystemMessage, AIMessage, HumanMessage
+from openrouter.errors import TooManyRequestsResponseError
 
-class Agent:
-  def __init__(self, model: str = "google/gemma-3-4b-it") -> None:
-    self.model = model
-    self.llm_provider = ChatOpenRouter(model = model)
-    self.messages = []
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import InMemorySaver
 
-  def invoke(self, user_prompt: str) -> str:
-    self.messages.append(HumanMessage(content=user_prompt))
-    response = self.llm_provider.invoke(self.messages)
-    self.messages.append(response)
+load_dotenv()
 
-    return response
+TOKEN_BUDGET = 10.000
+SYSTEM_PROMPT = """
+  # Role
+  Your name is Gilgamesh.
+  You are capable and insightful analytics expert for the retail company.
+"""
 
-  def conversation(self) -> list:
-    return [m.content for m in self.messages]
+llm_provider = ChatOpenRouter(model = "google/gemma-3-4b-it")
+console = Console()
 
+class MainState(TypedDict):
+  messages: Annotated[list[AnyMessage], add_messages]
+  token_budget: int
+  tokens_used: int
+  query_results: list
+
+def call_llm(state: MainState) -> dict:
+  context = [SystemMessage(content = SYSTEM_PROMPT)] + state['messages']
+
+  try:
+    result = llm_provider.invoke(context)
+  except TooManyRequestsResponseError:
+    console.print(f"[bold cyan]agent[/] Currently the Provider is busy and asked us to wait :)")
+
+  return { "messages": [result], "tokens_used": state['tokens_used'] + result.usage_metadata["total_tokens"] }
 
 def main():
-  load_dotenv()
-
-  agent = Agent()
-  console = Console()
+  graph_builder = StateGraph(MainState)
+  graph_builder.add_node('call_llm', call_llm)
+  graph_builder.add_edge(START, "call_llm")
+  graph_builder.add_edge("call_llm", END)
+  graph = graph_builder.compile(checkpointer=InMemorySaver())
 
   while True:
     user_input = input("> ").strip()
@@ -37,15 +56,13 @@ def main():
     if user_input in ("/quit", "/exit", "exit()"):
       break
 
-    if user_input in ("/history"):
-      console.print(f"[bold cyan]agent[/] {agent.conversation()}")
-      continue
-
     with console.status("Thinking...", spinner="dots"):
-      response = agent.invoke(user_input)
-      reply = response.content
+      result = graph.invoke(
+        { "messages": [HumanMessage(content = user_input)], "token_budget": TOKEN_BUDGET, "tokens_used": 0 },
+        { "configurable": { "thread_id": "cli-session" } }
+      )
 
-      console.print(f"[bold cyan]agent[/] {reply}")
+    console.print(f"[bold cyan]agent[/] {result['messages'][-1].content}")
 
 if __name__ == "__main__":
   main()
