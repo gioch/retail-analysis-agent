@@ -1,9 +1,9 @@
 import os
 from dotenv import load_dotenv
+from rich.console import Console
+
 from langchain_openrouter import ChatOpenRouter
 from langchain.messages import SystemMessage, AIMessage, HumanMessage
-
-load_dotenv()
 
 class Agent:
   def __init__(self, model: str = "google/gemma-3-4b-it") -> None:
@@ -16,14 +16,17 @@ class Agent:
     response = self.llm_provider.invoke(self.messages)
     self.messages.append(response)
 
-    return response.content
+    return response
 
   def conversation(self) -> list:
     return [m.content for m in self.messages]
 
 
 def main():
+  load_dotenv()
+
   agent = Agent()
+  console = Console()
 
   while True:
     user_input = input("> ").strip()
@@ -35,12 +38,14 @@ def main():
       break
 
     if user_input in ("/history"):
-      print(agent.conversation())
+      console.print(f"[bold cyan]agent[/] {agent.conversation()}")
       continue
 
-    response = agent.invoke(user_input)
+    with console.status("Thinking...", spinner="dots"):
+      response = agent.invoke(user_input)
+      reply = response.content
 
-    print(response)
+      console.print(f"[bold cyan]agent[/] {reply}")
 
 if __name__ == "__main__":
   main()
