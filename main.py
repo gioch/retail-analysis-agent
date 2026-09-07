@@ -1,58 +1,43 @@
-import os
-import yaml
 from dotenv import load_dotenv
 from rich.console import Console
 
 from langgraph.graph.message import add_messages
-from typing import TypedDict, Annotated, Literal
+from typing import TypedDict, Annotated
 
 from langchain.messages import AnyMessage, SystemMessage, AIMessage, HumanMessage
+from langchain_core.prompts import PromptTemplate
 from langchain_openrouter import ChatOpenRouter
 from openrouter.errors import TooManyRequestsResponseError
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 
-from pydantic import BaseModel
+from bq_schema import load_schema
 
 load_dotenv()
-
-# Loading schema and comparing it against the real database to ensure its validity
-# (I have to move this to the separate file)
-ColumnType = Literal["INTEGER", "STRING", "TIMESTAMP", "FLOAT", "BOOLEAN"]
-class EComerceDBColumn(BaseModel):
-  type: ColumnType
-  pii: bool = None
-  allowed: bool
-  description: str = None
-
-class EComerceDBTable(BaseModel):
-  enabled: bool
-  description: str = None
-  joins: list[str] = []
-  columns: dict[str, EComerceDBColumn]
-  values: list[str] | None = None
-
-class EComerceDBSchema(BaseModel):
-  tables: dict[str, EComerceDBTable]
-
-with open("ecomerce_db_schema.yml") as f:
-  raw = yaml.safe_load(f)
-
-schema = EComerceDBSchema.model_validate(raw)
+console = Console()
+bq_schema = load_schema()
 
 # LLM configurations
 # (I have to move this to the separate file)
-
-TOKEN_BUDGET = 10.000
-SYSTEM_PROMPT = """
-  # Role
-  Your name is Gilgamesh.
-  You are capable and insightful analytics expert for the retail company.
-"""
-
 llm_provider = ChatOpenRouter(model = "google/gemma-3-4b-it")
-console = Console()
+
+token_budget = 10000
+system_prompt_template = PromptTemplate.from_template(
+  """
+    # Role
+    Your name is Gilgamesh.
+    You are capable and insightful analyst working for the retail company.
+
+    # Overal ECommerce Database Schema
+    You know data science and SQL helps you to generate insightful reports.
+    Here is the list of database table names and their descriptions:
+    {table_names}
+  """
+)
+
+table_names = "\n".join(f"{name} - {table.description}" for name, table in bq_schema.tables.items())
+system_prompt = system_prompt_template.format(table_names = table_names)
 
 # State and Graph configurations
 # (I have to move this to the separate file)
@@ -63,7 +48,7 @@ class MainState(TypedDict):
   query_results: list
 
 def call_llm(state: MainState) -> dict:
-  context = [SystemMessage(content = SYSTEM_PROMPT)] + state['messages']
+  context = [SystemMessage(content = system_prompt)] + state['messages']
 
   try:
     result = llm_provider.invoke(context)
@@ -90,7 +75,7 @@ def main():
 
     with console.status("Thinking...", spinner="dots"):
       result = graph.invoke(
-        { "messages": [HumanMessage(content = user_input)], "token_budget": TOKEN_BUDGET, "tokens_used": 0 },
+        { "messages": [HumanMessage(content = user_input)], "token_budget": token_budget, "tokens_used": 0 },
         { "configurable": { "thread_id": "cli-session" } }
       )
 
