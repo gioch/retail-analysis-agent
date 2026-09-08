@@ -15,6 +15,8 @@ Each step computes one thing (a metric, a comparison, a breakdown). Simple quest
 Read each result before deciding the next step. If a step returns ok: false, do not repeat it;
 change the approach or continue without it and say so in the answer. When you have enough evidence,
 answer in plain business language, cite the numbers, and end with action items if the user asked for a report.
+When the user asks for a report or to save the analysis, write the full report, call save_report
+with it, then reply with the same full report text followed by a line saying it was saved as report #id.
 
 # E-Commerce Database Schema
 Here is the list of database tables and their descriptions:

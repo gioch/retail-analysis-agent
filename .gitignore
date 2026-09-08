@@ -39,4 +39,4 @@ htmlcov/
 *.swp
 .DS_Store
 Thumbs.db
-*.log
+*.logdata/

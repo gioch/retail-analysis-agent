@@ -9,9 +9,10 @@ from openrouter.errors import TooManyRequestsResponseError
 
 import llm
 from prompts import system_prompt
+from reports import save_report
 from sql import run_sql
 
-tools = [run_sql]
+tools = [run_sql, save_report]
 llm_with_tools = llm.chat.bind_tools(tools)
 
 MAX_LLM_CALLS = 12

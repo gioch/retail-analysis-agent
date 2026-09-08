@@ -10,6 +10,7 @@ from langchain.messages import HumanMessage
 
 import llm
 from graph import build_graph
+from reports import list_reports
 from sql import results
 
 console = Console()
@@ -18,6 +19,7 @@ HELP = """
 /help          show this message
 /user <name>   switch the current user
 /trace         show the analysis steps of this session
+/reports       list your saved reports
 /quit          exit
 """
 
@@ -32,6 +34,12 @@ def handle_command(user_input: str, session: dict) -> None:
     console.print(f"Switched to user [bold]{arg}[/]")
   elif command == "/trace":
     print_trace()
+  elif command == "/reports":
+    rows = list_reports(session["user"])
+    for row in rows:
+      console.print(f"[bold]#{row['id']}[/] {row['title']}  [dim]{row['created_at']}[/]")
+    if not rows:
+      console.print("No saved reports.")
   else:
     console.print(f"Unknown command: {user_input}. Type /help.")
 
@@ -54,7 +62,8 @@ def ask(graph, user_input: str, config: dict) -> str:
       message = update.get("call_llm", {}).get("messages", [None])[-1]
       if message is not None and message.tool_calls:
         step += 1
-        status.update(f"Step {step}: {message.tool_calls[0]['args']['intent'][:90]}")
+        call = message.tool_calls[0]
+        status.update(f"Step {step}: {call['args'].get('intent', call['name'])[:90]}")
       elif message is not None:
         return message.content
   return "No answer was produced."
@@ -67,7 +76,6 @@ def main():
 
   graph = build_graph()
   session = {"user": args.user}
-  config = {"configurable": {"thread_id": "cli-session"}}
 
   console.print(f"Logged in as [bold]{session['user']}[/]. Type /help for commands.")
 
@@ -88,6 +96,7 @@ def main():
       continue
 
     llm.reset_usage()
+    config = {"configurable": {"thread_id": "cli-session", "user_id": session["user"]}}
     answer = ask(graph, user_input, config)
 
     console.print("[bold cyan]agent[/]")
