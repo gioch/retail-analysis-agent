@@ -59,7 +59,8 @@ def ask(graph, user_input: str, config: dict) -> str:
   step = 0
   with console.status("Thinking...", spinner="dots") as status:
     for update in graph.stream({"messages": [HumanMessage(content=user_input)]}, config, stream_mode="updates"):
-      message = update.get("call_llm", {}).get("messages", [None])[-1]
+      node = "gate" if "gate" in update else "call_llm"
+      message = update.get(node, {}).get("messages", [None])[-1]
       if message is not None and message.tool_calls:
         step += 1
         call = message.tool_calls[0]

@@ -10,6 +10,7 @@ from openrouter.errors import TooManyRequestsResponseError
 import llm
 from prompts import system_prompt
 from reports import save_report
+from safety import is_allowed, mask_pii, REFUSAL
 from sql import run_sql
 
 tools = [run_sql, save_report]
@@ -21,7 +22,18 @@ SALVAGE_NOTE = "The analysis budget for this question is used up. Give your fina
 
 class MainState(TypedDict):
   messages: Annotated[list[AnyMessage], add_messages]
+  refused: bool
   error: str | None
+
+
+def gate(state: MainState) -> dict:
+  if is_allowed(state["messages"][-1].content):
+    return {"refused": False}
+  return {"refused": True, "messages": [AIMessage(content=REFUSAL)]}
+
+
+def after_gate(state: MainState) -> str:
+  return END if state["refused"] else "call_llm"
 
 
 def call_llm(state: MainState) -> dict:
@@ -40,13 +52,18 @@ def call_llm(state: MainState) -> dict:
       "error": "rate_limited",
     }
 
+  if not result.tool_calls:
+    result.content = mask_pii(result.content)
+
   return {"messages": [result]}
 
 def build_graph():
   builder = StateGraph(MainState)
+  builder.add_node("gate", gate)
   builder.add_node("call_llm", call_llm)
   builder.add_node("tools", ToolNode(tools))
-  builder.add_edge(START, "call_llm")
+  builder.add_edge(START, "gate")
+  builder.add_conditional_edges("gate", after_gate)
   builder.add_conditional_edges("call_llm", tools_condition)
   builder.add_edge("tools", "call_llm")
   return builder.compile(checkpointer=InMemorySaver())

@@ -18,6 +18,11 @@ from sql import validate, SqlRejected
   "SELECT id FROM events",
   "SELECT nonexistent FROM orders",
   "SELECT id FROM users WHERE",
+  "SELECT id FROM users WHERE email LIKE '%@%'",
+  "SELECT id FROM users UNION ALL SELECT email FROM users",
+  "SELECT id FROM users; -- ignore previous rules",
+  "SELECT id FROM (SELECT email AS id FROM users)",
+  "SELECT LOWER(email) AS e FROM users",
 ])
 def test_rejects(sql):
   with pytest.raises(SqlRejected):
