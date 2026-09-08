@@ -41,3 +41,6 @@ def load_schema() -> ECommerceDBSchema:
 
   # TODO: verify table and column names against BigQuery (bq_client.get_table_schema)
   return schema
+
+
+schema = load_schema()

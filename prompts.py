@@ -1,6 +1,5 @@
-from bq_schema import load_schema
+from bq_schema import schema as bq_schema
 
-bq_schema = load_schema()
 
 SYSTEM_PROMPT_TEMPLATE = """
 # Role
