@@ -46,6 +46,20 @@ def print_trace() -> None:
   console.print(f"Last turn: {llm.usage['calls']} LLM calls, {llm.usage['tokens']} tokens")
 
 
+def ask(graph, user_input: str, config: dict) -> str:
+  """Stream node updates so the spinner narrates each analysis step; return the final reply."""
+  step = 0
+  with console.status("Thinking...", spinner="dots") as status:
+    for update in graph.stream({"messages": [HumanMessage(content=user_input)]}, config, stream_mode="updates"):
+      message = update.get("call_llm", {}).get("messages", [None])[-1]
+      if message is not None and message.tool_calls:
+        step += 1
+        status.update(f"Step {step}: {message.tool_calls[0]['args']['intent'][:90]}")
+      elif message is not None:
+        return message.content
+  return "No answer was produced."
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--user", default="manager_a")
@@ -74,11 +88,10 @@ def main():
       continue
 
     llm.reset_usage()
-    with console.status("Thinking...", spinner="dots"):
-      result = graph.invoke({"messages": [HumanMessage(content=user_input)]}, config)
+    answer = ask(graph, user_input, config)
 
     console.print("[bold cyan]agent[/]")
-    console.print(Markdown(result["messages"][-1].content))
+    console.print(Markdown(answer))
 
 
 if __name__ == "__main__":
