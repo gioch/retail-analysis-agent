@@ -8,10 +8,11 @@ from rich.console import Console
 from rich.markdown import Markdown
 from langchain.messages import HumanMessage
 
+import llm
 from graph import build_graph
+from sql import results
 
 console = Console()
-TOKEN_BUDGET = 10000
 
 HELP = """
 /help          show this message
@@ -30,9 +31,19 @@ def handle_command(user_input: str, session: dict) -> None:
     session["user"] = arg
     console.print(f"Switched to user [bold]{arg}[/]")
   elif command == "/trace":
-    console.print("No analysis steps yet.")
+    print_trace()
   else:
     console.print(f"Unknown command: {user_input}. Type /help.")
+
+
+def print_trace() -> None:
+  if not results:
+    console.print("No analysis steps yet.")
+  for result in results.values():
+    console.print(f"[bold]{result['result_id']}[/] {result['intent']}")
+    console.print(f"  rows: {result['row_count']}  attempts: {result.get('attempts', 1)}")
+    console.print(f"  [dim]{result['sql']}[/]")
+  console.print(f"Last turn: {llm.usage['calls']} LLM calls, {llm.usage['tokens']} tokens")
 
 
 def main():
@@ -62,11 +73,9 @@ def main():
       handle_command(user_input, session)
       continue
 
+    llm.reset_usage()
     with console.status("Thinking...", spinner="dots"):
-      result = graph.invoke(
-        {"messages": [HumanMessage(content=user_input)], "token_budget": TOKEN_BUDGET, "tokens_used": 0},
-        config,
-      )
+      result = graph.invoke({"messages": [HumanMessage(content=user_input)]}, config)
 
     console.print("[bold cyan]agent[/]")
     console.print(Markdown(result["messages"][-1].content))

@@ -249,13 +249,6 @@ tables:
         allowed: true
         description: Distribution center that stocks this product. Join key to distribution_centers.
  
-  # ---------------------------------------------------------------------------
-  # Extension tables — present in the dataset, out of prototype scope.
-  # Flip enabled: true to bring one into the agent (prompt catalog, validator,
-  # and describe_table pick it up automatically). This block IS the
-  # "extendable to new data sources" mechanism.
-  # ---------------------------------------------------------------------------
- 
   inventory_items:
     enabled: false
     description: >
@@ -282,7 +275,7 @@ tables:
       product_distribution_center_id: { type: INTEGER, allowed: true, description: Warehouse holding this unit. }
  
   distribution_centers:
-    enabled: false
+    enabled: true
     description: >
       Warehouse locations. One row per distribution center. Enables
       warehouse-level inventory and fulfilment analysis.
@@ -318,6 +311,21 @@ tables:
       uri: { type: STRING, allowed: true, description: Page path of the event. }
       event_type: { type: STRING, allowed: true, description: "Kind of event (e.g. home, department, product, cart, purchase, cancel)." }
  
-glossary: {}
+glossary:
+  revenue: SUM(order_items.sale_price) over items with status = 'Complete'. Cancelled and Returned items are not revenue.
+  order count: COUNT(DISTINCT order_items.order_id), not row count (an order has several items).
+  active customer: a user with at least one Complete order in the period.
+  new customer: a user whose first Complete order falls in the period.
+  churned customer: an active customer in the previous period with no order in the current period.
+  churn rate: churned customers / active customers in the previous period.
+  basket size: revenue / order count for the period.
+  return rate: items with returned_at IS NOT NULL / all items sold, per period or segment.
 
-policy: []
+policy:
+  - Time axis for sales and revenue is order_items.created_at; for order-level questions use orders.created_at.
+  - Filter status = 'Complete' for revenue and demand unless the question is about cancellations or returns.
+  - Periods like this quarter or last month are calendar periods relative to CURRENT_DATE(); always compare to the previous equivalent period.
+  - Regional questions use users.state (full names, e.g. 'California').
+  - Aggregate first; never return individual users or orders unless explicitly asked for a top-N list.
+  - Round money to 2 decimals and alias every aggregate with a readable name.
+  - Do period math on DATE, never on TIMESTAMP. Convert with DATE(created_at), then use DATE_TRUNC(d, QUARTER), DATE_SUB(d, INTERVAL 1 QUARTER), and compare DATE to DATE.

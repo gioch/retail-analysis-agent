@@ -1,4 +1,7 @@
+import os
 import pytest
+
+os.environ.setdefault("OPENROUTER_API_KEY", "test")
 
 from sql import validate, SqlRejected
 
