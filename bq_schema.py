@@ -1,41 +1,43 @@
 import os
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Literal
 from bq_client import BigQueryRunner
 
-bg_client = BigQueryRunner(project_id=os.getenv("GOOGLE_BIG_QUERY_PROJECT_ID"))
+# bq_client = BigQueryRunner(project_id=os.getenv("GOOGLE_BIG_QUERY_PROJECT_ID"))
 
-class ECommerceDBColumn(BaseModel):
+
+class StrictModel(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+
+class ECommerceDBColumn(StrictModel):
   type: Literal["INTEGER", "STRING", "TIMESTAMP", "FLOAT", "BOOLEAN"]
-  pii: bool = None
   allowed: bool
-  description: str = None
-
-class ECommerceDBTable(BaseModel):
-  enabled: bool
-  description: str = None
-  joins: list[str] = []
-  columns: dict[str, ECommerceDBColumn]
+  pii: bool = False
+  description: str | None = None
   values: list[str] | None = None
 
-class ECommerceDBSchema(BaseModel):
+
+class ECommerceDBTable(StrictModel):
+  enabled: bool
+  description: str | None = None
+  joins: list[str] = []
+  columns: dict[str, ECommerceDBColumn]
+
+
+class ECommerceDBSchema(StrictModel):
   dataset: str
   tables: dict[str, ECommerceDBTable]
+  glossary: dict[str, str] = {}
+  policy: list[str] = []
+
 
 def load_schema() -> ECommerceDBSchema:
   with open("ecomerce_db_schema.yml") as f:
-    raw_ecomerce_db_schema = yaml.safe_load(f)
+    raw = yaml.safe_load(f)
 
-  ecomerce_db_schema = ECommerceDBSchema.model_validate(raw_ecomerce_db_schema)
+  schema = ECommerceDBSchema.model_validate(raw)
 
-  # Temporarily disabled
-  # for table in ecomerce_db_schema.tables:
-    # source_table = bg_client.get_table_schema(table)
-    # console.print(source_table)
-
-  print(f"[bold red]--------------------------------------")
-  print(f"[bold red]TO BE IMPLEMENTED! Actual table and column name checker")
-  print(f"[bold red]--------------------------------------")
-
-  return ecomerce_db_schema
+  # TODO: verify table and column names against BigQuery (bq_client.get_table_schema)
+  return schema

@@ -272,7 +272,7 @@ tables:
       product_id: { type: INTEGER, allowed: true, description: Product type of this unit. }
       created_at: { type: TIMESTAMP, allowed: true, description: When the unit entered inventory. }
       sold_at: { type: TIMESTAMP, allowed: true, description: When the unit was sold. NULL = still in stock. }
-      cost: { type: FLOAT, allowed: true, description: What the company paid for this unit, USD. Margin basis. }
+      cost: { type: FLOAT, allowed: true, description: "What the company paid for this unit, USD. Margin basis." }
       product_category: { type: STRING, allowed: true, description: Denormalized product category. }
       product_name: { type: STRING, allowed: true, description: Denormalized product name. }
       product_brand: { type: STRING, allowed: true, description: Denormalized brand. }
@@ -290,7 +290,7 @@ tables:
       - "distribution_centers.id = products.distribution_center_id"
     columns:
       id: { type: INTEGER, allowed: true, description: Unique distribution center id. }
-      name: { type: STRING, allowed: true, description: Center name, typically "City State" (e.g. "Memphis TN"). }
+      name: { type: STRING, allowed: true, description: "Center name, typically \"City State\" (e.g. \"Memphis TN\")." }
       latitude: { type: FLOAT, allowed: true, description: Facility latitude (business location — not PII). }
       longitude: { type: FLOAT, allowed: true, description: Facility longitude. }
  
@@ -313,8 +313,11 @@ tables:
       city: { type: STRING, allowed: true, description: Geo-resolved city of the session. }
       state: { type: STRING, allowed: true, description: Geo-resolved state of the session. }
       postal_code: { type: STRING, allowed: false, pii: true }
-      browser: { type: STRING, allowed: true, description: Browser family (Chrome, Safari, Firefox, ...). }
-      traffic_source: { type: STRING, allowed: true, description: Channel that led to the session (Email, Adwords, Organic, YouTube, Facebook). }
+      browser: { type: STRING, allowed: true, description: "Browser family (Chrome, Safari, Firefox, ...)." }
+      traffic_source: { type: STRING, allowed: true, description: "Channel that led to the session (Email, Adwords, Organic, YouTube, Facebook)." }
       uri: { type: STRING, allowed: true, description: Page path of the event. }
-      event_type: { type: STRING, allowed: true, description: Kind of event (e.g. home, department, product, cart, purchase, cancel). }
+      event_type: { type: STRING, allowed: true, description: "Kind of event (e.g. home, department, product, cart, purchase, cancel)." }
  
+glossary: {}
+
+policy: []
