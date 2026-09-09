@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 from bq_schema import schema as bq_schema
 
@@ -32,8 +33,7 @@ Here is the list of database tables and their descriptions:
 
 
 def system_prompt(preferences: dict) -> str:
-  with open("persona.md") as f:
-    persona = f.read().strip()
+  persona = (Path(__file__).parent / "persona.md").read_text().strip()  # read per request so edits apply without restart
 
   table_names = "\n".join(f"{name} - {table.description}" for name, table in bq_schema.tables.items())
 
