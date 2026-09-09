@@ -16,7 +16,7 @@ def run_sql(intent: str, tables: list[str]) -> dict:
   result_id, the SQL used, row_count and rows (or a preview when there are many).
 
   Args:
-    intent: What this step should compute, in plain English, e.g. "monthly revenue in California for 2025".
+    intent: What this step should compute, in plain English and self-contained, including every filter such as region and period, e.g. "monthly revenue in California for 2025".
     tables: Names of the tables the step needs, from the schema catalog.
   """
 

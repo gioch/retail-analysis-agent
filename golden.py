@@ -33,7 +33,7 @@ def retrieve(question: str) -> list[dict]:
 def render(hits: list[dict]) -> str:
   if not hits:
     return ""
-  parts = ["# Past analyses by our analysts (adapt the method to the current question, do not copy blindly)"]
+  parts = ["# Past analyses by our analysts. Adapt the method to the current question: substitute the user's region, period and metric into every step intent; never copy a step verbatim."]
   for trio in hits:
     parts.append(f"## {trio['question']}\n{trio['description'].strip()}\nSteps:")
     for i, step in enumerate(trio["analysis_plan"], 1):
