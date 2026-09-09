@@ -2,7 +2,6 @@ from datetime import date
 
 from bq_schema import schema as bq_schema
 
-
 DEPTH_STEPS = {"headline": "1-2", "standard": "3-4", "deep": "5-6"}
 
 SYSTEM_PROMPT_TEMPLATE = """
@@ -34,8 +33,10 @@ Here is the list of database tables and their descriptions:
 
 def system_prompt(preferences: dict) -> str:
   with open("persona.md") as f:
-    persona = f.read().strip()  # read per request so edits apply without restart
+    persona = f.read().strip()
+
   table_names = "\n".join(f"{name} - {table.description}" for name, table in bq_schema.tables.items())
+
   return SYSTEM_PROMPT_TEMPLATE.format(
     persona=persona,
     today=date.today().isoformat(),
@@ -72,6 +73,7 @@ def sql_generation_prompt(tables: list[str]) -> str:
 
 def describe_tables(names: list[str]) -> str:
   """Detailed schema for the SQL generation prompt. Blocked columns are simply absent."""
+
   parts = []
   for name in names:
     table = bq_schema.tables.get(name)

@@ -19,11 +19,13 @@ DEMO_REPORTS = [
 
 for owner, title, body in DEMO_REPORTS:
   exists = db.execute("SELECT 1 FROM reports WHERE owner_id = ? AND title = ?", (owner, title)).fetchone()
+
   if not exists:
     db.execute(
       "INSERT INTO reports (owner_id, title, body, result_ids, created_at) VALUES (?, ?, ?, ?, ?)",
       (owner, title, body, json.dumps([]), datetime.now(timezone.utc).isoformat(timespec="seconds")),
     )
+
 db.commit()
 
 print("Seeded preferences for manager_a (table, standard) and manager_b (bullets, headline), and 4 demo reports.")

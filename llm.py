@@ -32,6 +32,7 @@ breaker = {"failures": 0, "open_until": 0.0}
 
 def invoke(messages, tools=None):
   """Every LLM call goes through here: budget accounting, retries, and primary → fallback switching."""
+
   if time.time() < breaker["open_until"]:
     return _call(FALLBACK, messages, tools)
 

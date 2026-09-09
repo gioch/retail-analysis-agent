@@ -18,6 +18,7 @@ db.execute("""
 
 def get_preferences(user_id: str) -> dict:
   rows = db.execute("SELECT key, value FROM preferences WHERE user_id = ?", (user_id,)).fetchall()
+
   return {**DEFAULTS, **{row["key"]: row["value"] for row in rows}}
 
 
