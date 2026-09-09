@@ -16,7 +16,7 @@ PII_PATTERNS = [
 
 def is_allowed(user_input: str) -> bool:
   """One cheap classification call; anything but an explicit ALLOW is refused."""
-  reply = llm.invoke(llm.chat, [SystemMessage(content=GATE_PROMPT), HumanMessage(content=user_input)])
+  reply = llm.invoke([SystemMessage(content=GATE_PROMPT), HumanMessage(content=user_input)])
   return reply.content.strip().upper().startswith("ALLOW")
 
 

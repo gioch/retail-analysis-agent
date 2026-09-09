@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import argparse
+import logging
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -10,10 +11,13 @@ from langchain.messages import HumanMessage
 
 import llm
 from graph import build_graph
+from preferences import get_preferences
 from reports import list_reports
 from sql import results
 
 console = Console()
+logging.basicConfig(filename="agent.log", level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", force=True)  # bq_client configures logging first
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 HELP = """
 /help          show this message
@@ -31,7 +35,7 @@ def handle_command(user_input: str, session: dict) -> None:
     console.print(HELP)
   elif command == "/user" and arg:
     session["user"] = arg
-    console.print(f"Switched to user [bold]{arg}[/]")
+    console.print(f"Switched to user [bold]{arg}[/] {get_preferences(arg)}")
   elif command == "/trace":
     print_trace()
   elif command == "/reports":
@@ -98,7 +102,11 @@ def main():
 
     llm.reset_usage()
     config = {"configurable": {"thread_id": "cli-session", "user_id": session["user"]}}
-    answer = ask(graph, user_input, config)
+    try:
+      answer = ask(graph, user_input, config)
+    except Exception:
+      logging.exception("Turn failed")
+      answer = "Something went wrong on my side and I could not finish this request. Please try again, or ask in a different way."
 
     console.print("[bold cyan]agent[/]")
     console.print(Markdown(answer))

@@ -5,10 +5,10 @@ import sqlglot
 from sqlglot import exp
 
 from langchain.messages import SystemMessage, HumanMessage
-from langchain.tools import tool
 
 from bq_client import BigQueryRunner
 from bq_schema import schema
+from reports import db
 import llm
 from prompts import sql_generation_prompt
 
@@ -21,6 +21,18 @@ PREVIEW_ROWS = 15
 
 bq = BigQueryRunner(project_id=os.getenv("GOOGLE_BIG_QUERY_PROJECT_ID"))
 results: dict[str, dict] = {}
+
+db.execute("""
+  CREATE TABLE IF NOT EXISTS results (
+    id INTEGER PRIMARY KEY,
+    result_id TEXT NOT NULL,
+    intent TEXT NOT NULL,
+    sql TEXT NOT NULL,
+    row_count INTEGER NOT NULL,
+    snapshot TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+""")
 
 
 class SqlRejected(Exception):
@@ -89,6 +101,12 @@ def execute(intent: str, sql: str) -> dict:
     "truncated": len(df) > INLINE_ROWS,
   }
   results[result_id] = {**envelope, "df": df}
+  # SQL is the recipe, the snapshot is the evidence: warehouse data drifts daily
+  db.execute(
+    "INSERT INTO results (result_id, intent, sql, row_count, snapshot) VALUES (?, ?, ?, ?, ?)",
+    (result_id, intent, sql, len(df), df.to_json(orient="records", date_format="iso")),
+  )
+  db.commit()
   return envelope
 
 
@@ -97,26 +115,5 @@ def generate(intent: str, tables: list[str], last_error: str | None) -> str:
   if last_error:
     user += f"\n\nYour previous query was rejected: {last_error}\nWrite a corrected query."
 
-  reply = llm.invoke(llm.chat, [SystemMessage(content=sql_generation_prompt(tables)), HumanMessage(content=user)])
+  reply = llm.invoke([SystemMessage(content=sql_generation_prompt(tables)), HumanMessage(content=user)])
   return reply.content.strip().removeprefix("```sql").removeprefix("```").removesuffix("```").strip()
-
-
-@tool
-def run_sql(intent: str, tables: list[str]) -> dict:
-  """Run one analysis step against the database. Describe what the step should
-  compute in plain English (intent) and name the tables it needs. Returns a result
-  envelope with a result_id, the SQL used, row_count and rows (or a preview)."""
-  last_error = None
-  for attempt in range(1, MAX_ATTEMPTS + 1):
-    sql = generate(intent, tables, last_error)
-    try:
-      envelope = execute(intent, validate(sql))
-      envelope["attempts"] = attempt
-      results[envelope["result_id"]]["attempts"] = attempt
-      return envelope
-    except SqlRejected as e:
-      last_error = str(e)
-    except Exception as e:
-      last_error = f"BigQuery error: {e}"
-
-  return {"ok": False, "intent": intent, "last_error": last_error, "attempts": MAX_ATTEMPTS}
