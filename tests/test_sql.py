@@ -12,6 +12,8 @@ from sql import validate, SqlRejected
   "DROP TABLE orders",
   "SELECT id FROM users; DELETE FROM orders",
   "SELECT * FROM orders",
+  "SELECT o.* FROM orders o",
+  "SELECT order_id FROM (SELECT * FROM orders)",
   "SELECT email FROM users",
   "SELECT u.first_name FROM users u",
   "SELECT id FROM secret_table",
@@ -33,6 +35,10 @@ def test_qualifies_tables_and_injects_limit():
   out = validate("SELECT order_id FROM orders")
   assert "`bigquery-public-data`.thelook_ecommerce.orders" in out
   assert out.endswith("LIMIT 1000")
+
+
+def test_count_star_is_not_select_star():
+  assert "COUNT(*)" in validate("SELECT COUNT(*) AS orders FROM orders")
 
 
 def test_keeps_smaller_limit_and_caps_larger():

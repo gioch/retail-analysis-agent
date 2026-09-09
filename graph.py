@@ -10,6 +10,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 import llm
 from prompts import system_prompt
+import golden
 from preferences import get_preferences
 from safety import is_allowed, mask_pii, REFUSAL
 from tools import tools
@@ -21,6 +22,7 @@ SALVAGE_NOTE = "The analysis budget for this question is used up. Give your fina
 class MainState(TypedDict):
   messages: Annotated[list[AnyMessage], add_messages]
   refused: bool
+  trios: str
 
 
 def gate(state: MainState) -> dict:
@@ -31,12 +33,19 @@ def gate(state: MainState) -> dict:
 
 
 def after_gate(state: MainState) -> str:
-  return END if state["refused"] else "call_llm"
+  return END if state["refused"] else "retrieve"
+
+
+def retrieve(state: MainState) -> dict:
+  """Guaranteed before planning, not agent-optional: the model always sees relevant past analyses."""
+  hits = golden.retrieve(state["messages"][-1].content)
+  logging.info("retrieve trios=%s", [t["question"] for t in hits])
+  return {"trios": golden.render(hits)}
 
 
 def call_llm(state: MainState, config: RunnableConfig) -> dict:
   preferences = get_preferences(config["configurable"]["user_id"])
-  context = [SystemMessage(content=system_prompt(preferences))] + state["messages"]
+  context = [SystemMessage(content=system_prompt(preferences, state["trios"]))] + state["messages"]
   allowed_tools = tools
 
   if llm.usage["calls"] >= MAX_LLM_CALLS - 1:
@@ -55,10 +64,12 @@ def call_llm(state: MainState, config: RunnableConfig) -> dict:
 def build_graph():
   builder = StateGraph(MainState)
   builder.add_node("gate", gate)
+  builder.add_node("retrieve", retrieve)
   builder.add_node("call_llm", call_llm)
   builder.add_node("tools", ToolNode(tools))
   builder.add_edge(START, "gate")
   builder.add_conditional_edges("gate", after_gate)
+  builder.add_edge("retrieve", "call_llm")
   builder.add_conditional_edges("call_llm", tools_condition)
   builder.add_edge("tools", "call_llm")
   return builder.compile(checkpointer=InMemorySaver())

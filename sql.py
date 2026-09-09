@@ -1,5 +1,6 @@
 import json
 import os
+import warnings
 
 import sqlglot
 from sqlglot import exp
@@ -19,6 +20,7 @@ INLINE_ROWS = 50
 MAX_ATTEMPTS = 3
 PREVIEW_ROWS = 15
 
+warnings.filterwarnings("ignore", message="BigQuery Storage module not found")  # REST is fine for LIMIT 1000
 bq = BigQueryRunner(project_id=os.getenv("GOOGLE_BIG_QUERY_PROJECT_ID"))
 results: dict[str, dict] = {}
 
@@ -53,8 +55,10 @@ def validate(sql: str) -> str:
   if not isinstance(query, exp.Select):
     raise SqlRejected(f"Only SELECT is allowed, got {query.key.upper()}.")
 
-  if list(query.find_all(exp.Star)):
-    raise SqlRejected("SELECT * is not allowed; list the columns explicitly.")
+  for select in query.find_all(exp.Select):
+    for item in select.expressions:
+      if isinstance(item, exp.Star) or (isinstance(item, exp.Column) and isinstance(item.this, exp.Star)):
+        raise SqlRejected("SELECT * is not allowed; list the columns explicitly.")
 
   tables = {name: t for name, t in schema.tables.items() if t.enabled}
   allowed = {c for t in tables.values() for c, col in t.columns.items() if col.allowed}

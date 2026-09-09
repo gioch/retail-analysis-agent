@@ -5,6 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 import sql
+from prompts import describe_tables
 from preferences import OPTIONS, set_preference_value
 from reports import save_report_row, find_reports, soft_delete_reports
 
@@ -111,4 +112,15 @@ def delete_reports(config: RunnableConfig, mentioning: str | None = None, this_c
   return {"ok": True, "deleted": deleted, "ids": ids}
 
 
-tools = [run_sql, save_report, set_preference, delete_reports]
+@tool(parse_docstring=True)
+def describe_table(table: str) -> str:
+  """Describe a table: its purpose, joins, and available columns with types and meaning.
+  Use it to answer questions about what data exists and to choose tables before run_sql.
+
+  Args:
+    table: A table name from the schema catalog, e.g. "orders".
+  """
+  return describe_tables([table]) or f"Unknown table '{table}'."
+
+
+tools = [run_sql, describe_table, save_report, set_preference, delete_reports]

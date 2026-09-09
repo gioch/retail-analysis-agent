@@ -66,3 +66,4 @@ xxhash==4.0.1
 zstandard==0.25.0
 pytest==9.1.1
 db-dtypes==1.7.1
+rich==15.0.0

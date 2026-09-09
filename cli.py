@@ -63,7 +63,7 @@ def print_trace() -> None:
 def ask(graph, user_input: str, config: dict) -> str:
   """Stream node updates so the spinner narrates each analysis step; return the final reply."""
   step = 0
-  graph_input = {"messages": [HumanMessage(content=user_input)]}
+  graph_input = {"messages": [HumanMessage(content=user_input)], "trios": ""}
   while True:
     with console.status("Thinking...", spinner="dots") as status:
       for update in graph.stream(graph_input, config, stream_mode="updates"):

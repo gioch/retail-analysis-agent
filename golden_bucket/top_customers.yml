@@ -1,0 +1,12 @@
+question: Who are our top customers by total spend?
+tags: [top customers, best customers, biggest customers, total spend, spending]
+status: approved
+description: >
+  One aggregate query. Customers are identified by id and segment attributes only.
+analysis_plan:
+  - purpose: Rank customers by completed revenue, by id only (no personal details)
+    sql: |
+      SELECT oi.user_id, u.state, COUNT(DISTINCT oi.order_id) AS orders, ROUND(SUM(oi.sale_price), 2) AS total_spend
+      FROM order_items oi JOIN users u ON u.id = oi.user_id
+      WHERE oi.status = 'Complete'
+      GROUP BY oi.user_id, u.state ORDER BY total_spend DESC LIMIT 10

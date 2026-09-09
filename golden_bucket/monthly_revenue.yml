@@ -1,0 +1,12 @@
+question: What is our monthly revenue trend this year?
+tags: [monthly revenue, revenue trend, per month, month by month, this year]
+status: approved
+description: >
+  One aggregate query on the revenue time axis; mention the direction of the trend.
+analysis_plan:
+  - purpose: Completed revenue by month for the current year
+    sql: |
+      SELECT DATE_TRUNC(DATE(created_at), MONTH) AS month, ROUND(SUM(sale_price), 2) AS revenue
+      FROM order_items
+      WHERE status = 'Complete' AND DATE(created_at) >= DATE_TRUNC(CURRENT_DATE(), YEAR)
+      GROUP BY month ORDER BY month

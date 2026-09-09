@@ -1,0 +1,41 @@
+question: Why is revenue in California down this quarter?
+tags: [revenue, quarter, down, drop, decline, decreas, underspend]
+status: approved
+description: >
+  Quantify the change first and confirm the premise. Then decompose revenue into customers × orders per customer × basket size to see which factor moved. Then localize by category. Finally rule out returns as a mechanical cause. Report the dominant driver with its numbers, and give one action item per driver.
+analysis_plan:
+  - purpose: Quantify the change - revenue this quarter vs last quarter for the state
+    sql: |
+      WITH q AS (
+        SELECT DATE_TRUNC(DATE(oi.created_at), QUARTER) AS quarter, ROUND(SUM(oi.sale_price), 2) AS revenue
+        FROM order_items oi JOIN users u ON u.id = oi.user_id
+        WHERE u.state = 'California' AND oi.status = 'Complete'
+          AND DATE(oi.created_at) >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 1 QUARTER)
+        GROUP BY quarter
+      )
+      SELECT quarter, revenue FROM q ORDER BY quarter
+  - purpose: Decompose revenue into customers x orders per customer x basket size, per quarter
+    sql: |
+      SELECT DATE_TRUNC(DATE(oi.created_at), QUARTER) AS quarter,
+        COUNT(DISTINCT oi.user_id) AS customers,
+        COUNT(DISTINCT oi.order_id) AS orders,
+        ROUND(SUM(oi.sale_price) / COUNT(DISTINCT oi.order_id), 2) AS basket_size
+      FROM order_items oi JOIN users u ON u.id = oi.user_id
+      WHERE u.state = 'California' AND oi.status = 'Complete'
+        AND DATE(oi.created_at) >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 1 QUARTER)
+      GROUP BY quarter ORDER BY quarter
+  - purpose: Localize the change by product category, quarter over quarter
+    sql: |
+      SELECT p.category, DATE_TRUNC(DATE(oi.created_at), QUARTER) AS quarter, ROUND(SUM(oi.sale_price), 2) AS revenue
+      FROM order_items oi JOIN users u ON u.id = oi.user_id JOIN products p ON p.id = oi.product_id
+      WHERE u.state = 'California' AND oi.status = 'Complete'
+        AND DATE(oi.created_at) >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 1 QUARTER)
+      GROUP BY p.category, quarter ORDER BY p.category, quarter
+  - purpose: Check whether returns rose, which would depress completed revenue
+    sql: |
+      SELECT DATE_TRUNC(DATE(oi.created_at), QUARTER) AS quarter,
+        ROUND(COUNTIF(oi.returned_at IS NOT NULL) / COUNT(*), 4) AS return_rate
+      FROM order_items oi JOIN users u ON u.id = oi.user_id
+      WHERE u.state = 'California'
+        AND DATE(oi.created_at) >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 1 QUARTER)
+      GROUP BY quarter ORDER BY quarter
